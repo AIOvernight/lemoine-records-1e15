@@ -1,0 +1,3 @@
+DONE lines: 3881, first X=268435456, last E=1000000725188608, last width=123*2^30
+ALLDONE N=1000000725188608 pi=29844591414555 fail=0; EXIT rc=0; other lines: {'BUILD': 1, 'START': 1, 'EXIT': 1}
+continuity: OK

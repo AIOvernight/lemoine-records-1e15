@@ -1,0 +1,4 @@
+primecount 7.6, <https://github.com/kimwalisch/primecount>
+pi(10^15): primecount=29844570422669 known=29844570422669 OK
+pi(N-1), N=1000000725188608: log=29844591414555 primecount=29844591414555 OK
+primesieve [10^15, N-1] = 20991886; pi(10^15) + this = 29844591414555 OK

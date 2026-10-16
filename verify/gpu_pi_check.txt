@@ -1,0 +1,5 @@
+# pi check for log/gpu_3.6e15.log  (primecount 7.x, combinatorial algorithm, independent of the sieve)
+last DONE: E=3607647169282048  pi=103694116073174   (pi is cumulative from pi(N-1) of Shimizu's log, N=1000000725188608)
+primecount(E-1) = primecount(3607647169282047) = 103694116073174   -> OK
+primecount(N-1) = primecount(1000000725188607) = 29844591414555   (= pi of the ALLDONE line of log/l1e15.log: 29844591414555 -> OK)
+sum of piseg over the 10119 GPU DONE lines = 73849524658619 = primecount(E-1) - primecount(N-1) = 73849524658619 -> OK

@@ -3,6 +3,11 @@
 Prepared 2026/10/13 by Hirotaka Shimizu with the AI assistant Claude (see How this was made).
 Status: computational result. No human expert has checked it yet.
 
+**GPU extension (branch `gpu-3.6e15`, 2026-10-15):** the same two sequences were continued on one NVIDIA RTX 5090 from
+N to 3.6·10^15 (B) and 7.2·10^15 (A), adding four candidate terms, with purpose-written CUDA kernels (`src/lemgpu3.cu`: wheel
+sieve, tiled 128-shift cover, exact-phase scan; 1.15·10^11 numbers per second). See the section "GPU extension" below,
+[docs/GPU_KERNELS.md](docs/GPU_KERNELS.md) and [docs/GPU_PROVENANCE.md](docs/GPU_PROVENANCE.md). Everything above that section is Hirotaka Shimizu's original text.
+
 ## Claim
 
 Lemoine's conjecture (also called Levy's conjecture) states that every odd n > 5 can be written as n = 2p + q
@@ -53,6 +58,113 @@ B (least p), continuing A195353 (n) and A195354 (p). The OEIS tables end at n = 
 | 733975808707159 | 5881 |
 
 So q(n) ≤ 13037 for all odd 5 < n < 2N, and p(n) ≤ 5881 for all odd 5 < n < N.
+
+## GPU extension to 3.6·10^15 (B) / 7.2·10^15 (A)
+
+Added 2026-10-15 by an AI agent coordinated by [@AIOvernight](https://x.com/AIOvernight) (see
+[docs/GPU_PROVENANCE.md](docs/GPU_PROVENANCE.md)). Status: computational result, no human expert has checked it.
+It continues the run above from its end point N on the same grid, with the same conventions, and is calibrated
+against `log/l1e15.log`.
+
+### Claim
+
+Let E = 3607647169282048 = N + 10119 · 240 · 2^30. The GPU run checked every odd n with N ≤ n < E for B and
+2N ≤ n < 2E for A (`log/gpu_3.6e15.log`, 10119 `DONE` lines, anom = 0). Together with the run above:
+
+1. Every odd n with 5 < n < 2E = 7215294338564096 has a representation n = 2p + q.
+2. **B (least p).** For odd n < E the records of p(n) are the 54 `REC B` lines of `log/l1e15.log` followed by the
+   3 `REC B` lines of `log/gpu_3.6e15.log`.
+3. **A (least q).** For odd n < 2E the records of q(n) are the 57 `REC A` lines of `log/l1e15.log` followed by the
+   1 `REC A` line of `log/gpu_3.6e15.log`.
+
+### Candidate new terms
+
+A (least q), continuing A194828 (n) / A194829 (q) after n = 1350940030581751, q = 13037:
+
+| n | q |
+|---:|---:|
+| 2313425910783103 | 13841 |
+
+B (least p), continuing A195353 (n) / A195354 (p) after n = 733975808707159, p = 5881:
+
+| n | p |
+|---:|---:|
+| 1880662361770607 | 5939 |
+| 2423130987173003 | 6317 |
+| 3058699595197417 | 6337 |
+
+So q(n) ≤ 13841 for all odd 5 < n < 2E, and p(n) ≤ 6337 for all odd 5 < n < E. The four terms are listed in
+`oeis/candidates_gpu.txt`; they have not been submitted to the OEIS yet.
+
+### Method and CUDA kernels (`src/lemgpu3.cu`)
+
+The whole fast phase runs on the GPU, window by window on Shimizu's grid (X = 2^28 + k · 2^30, W = 2^30,
+margin 16384 odd numbers, K = 128, q = 1 excluded, A split by q mod 4):
+
+1. a segmented sieve of Eratosthenes writes the bit array P of the odd numbers in [X − 2·16384 + 1, X + W)
+   (shared-memory blocks of 2^19 bits with a wheel for the primes 3..31 for primes below 2^20, global atomic
+   updates with mod-30 skipping for the larger primes up to √(X + W));
+2. a cover kernel ORs P shifted by the first K small primes of each instance (B; A with q ≡ 1 and q ≡ 3 mod 4)
+   in shared-memory tiles grouped by word offset;
+3. a two-phase scan of the uncovered n (about 0.22 %) finds the least prime by trying the following small primes
+   and emits record candidates; the window chains are merged in order on the host, exactly as in `lemoine.c`.
+
+An n with no solution among the small primes of the margin would be reported as ANOMALY; none occurred.
+
+The six kernels, per window of 2^30 integers (one prime bitmap serves B and both halves of A):
+
+| Kernel | What it does | Launch |
+|---|---|---|
+| `k_small` | Segmented sieve for the primes 37 … 2^20 in a 64 KB shared-memory composite mask per block; the primes 3 … 31 are applied as a wheel of precomputed residue masks instead of being sieved | 1025 blocks × 1024 threads |
+| `k_large` | One thread per sieving prime from 2^20 to √(X + W), `atomicAnd` on the global bitmap, skipping the multiples whose cofactor is divisible by 3 or 5 (mod-30 gap table) | one thread per prime, 256 per block |
+| `k_count` | Popcount of the primes in the window (warp shuffle, one atomic per warp); the `piseg`/`pi` fields checked against primecount | 1024 × 256, grid-stride |
+| `k_cover` | **The fast phase.** Each block copies a tile of the bitmap into shared memory and ORs it shifted by the K = 128 small primes of the instance, the shifts grouped by word offset so that each output word needs a handful of shared loads; a thread owns 32 odd n and emits the uncovered ones (about 0.22 %) to a list | one thread per 32 n, 256 per block |
+| `k_scan` | **The exact phase.** One thread per uncovered n tries the following small primes in ascending order until the partner is prime; the least one is the value of the record function at n, compared with the running record, candidates above it are emitted | 4096 × 256 over the uncovered list |
+| `k_fin` | Closes the window's statistics and flags an overflow of the uncovered list as an anomaly (never happened) | 1 thread |
+
+Records are chained on the host in order of n, exactly as in `lemoine.c`. A kernel-by-kernel description (memory layout,
+the wheel, the tiled cover, the exact phase, throughput, and the differences from the first version `src/lemgpu.cu`) is
+in [docs/GPU_KERNELS.md](docs/GPU_KERNELS.md). The CPU recomputation `src/cpucheck.c` shares no code with the kernels.
+`src/lemgpu.cu` is the first version (no wheel, no tiles); it produced the first 213 `DONE` lines. The optimised
+version did the rest at 1.3–1.5·10^11 numbers per second; the mean over the run, including checks, was
+1.15·10^11 numbers per second, 6.31 hours of wall time on one RTX 5090 for 2.6·10^15 numbers (the CPU run above:
+71.5 hours on 12 threads for 10^15). Options: `SELFCHECK=k` compares the GPU bit array of every k-th window bit for bit
+with a primesieve bit array; `NAIVE=k` recomputes the uncovered counts and maxima of every k-th window on the CPU
+by a direct per-n scan; `PICUM=` continues the running prime count from the preceding log.
+
+### Verification
+
+| Check | What it shows | Script / file | Output |
+|---|---|---|---|
+| Calibration | on the first and the last segment of Shimizu's grid, both GPU programs give the same `DONE` fields and the same 17 `REC` lines as `log/l1e15.log` | `verify/gpu_calibration.md` | `verify/gpu_calibration/` |
+| Exhaustive run | every n in [N, E) (B) and [2N, 2E) (A), one program | `src/lemgpu3.cu` | `log/gpu_3.6e15.log` |
+| Coverage of the log | the 10119 `DONE` lines run from N to E without gap or overlap, widths 240·2^30, `pi` cumulative from π(N − 1), anom = 0, every `SELFCHECK` and `NAIVE` line ends in `ok`, the 4 `REC` lines are records above 13037 / 5881 | `verify/gpu_continuity.py` | `verify/gpu_continuity.txt` |
+| Coverage with Shimizu's script | his `verify/continuity.py` on the chain `log/l1e15.log` + `log/gpu_3.6e15.log`: all 14000 `DONE` lines chain from 2^28 to E and `pi` is cumulative; the remaining 6 issues it reports are header conventions only (4 `START` lines, no `ALLDONE`/`EXIT`, his last segment of 123·2^30 now in the middle) | `verify/continuity.py` | `verify/gpu_continuity.txt` |
+| Sieve self-check | 10031 windows (every 97th / 251st): GPU prime bit array equal to primesieve's, `words_diff=0` | `SELFCHECK` lines | `log/gpu_3.6e15.log` |
+| Per-n recheck | 1296 windows (every 503rd / 2003rd): uncovered counts and maxima recomputed on the CPU per n, all `ok` | `NAIVE` lines | `log/gpu_3.6e15.log` |
+| π(E) | the cumulative prime count of the last `DONE` line, 103694116073174, equals primecount's π(E − 1); the sum of `piseg` equals π(E − 1) − π(N − 1) | primecount | `verify/gpu_pi_check.txt` |
+| Value at each record | the 4 `REC` lines recomputed from the definitions with a deterministic Miller–Rabin test, and the maximum over the 100000 preceding odd n is smaller; also Shimizu's `verify/naive_check.py`: 4/4 match | `verify/gpu_naive_check.py`, `verify/naive_check.py` | `verify/gpu_naive_check.txt` |
+| Segment recomputation | 6 full segments (the first, segment 1500, and the 4 that contain the records) recomputed by `src/cpucheck.c`, an independent CPU program (primesieve bit array, direct per-n scan, no shared code with the kernels): `piseg`, `uncB`, `uncA`, `maxB`, `maxA` identical, and each record line reproduced | `src/cpucheck.c` | `verify/gpu_cpucheck_summary.txt`, `verify/gpu_cpucheck/` |
+
+Limits: as for the CPU run, the record property over the whole range rests on the one exhaustive GPU pass; the
+independent recomputation covers 6 of the 10119 segments (0.06 %) in full, plus the sampled windows above. A second
+full pass with a different program would make it airtight. The run was stopped by the operator at a `DONE` boundary
+(END had been set to 5·10^15), so the log has no `ALLDONE` line; E is the `E` of its last `DONE` line.
+
+### Reproduce
+
+Requirements: CUDA 12.x with an NVIDIA GPU (the code targets sm_120; pass another `ARCH` to `build_gpu.sh`),
+primesieve (headers and library), gcc with OpenMP, Python 3, primecount for the π check.
+
+```bash
+bash build_gpu.sh sm_120 /usr/local          # lemgpu3, lemgpu, cpucheck
+python3 verify/gpu_continuity.py log/gpu_3.6e15.log
+python3 verify/gpu_naive_check.py log/gpu_3.6e15.log 100000
+python3 verify/naive_check.py log/gpu_3.6e15.log
+primecount 3607647169282047                   # expect 103694116073174
+./cpucheck 3058492650815488 3058750348853248 13037 6317   # one record segment, ~5 min on 16 threads; compare with its DONE line
+bash run_gpu.sh                               # the full continuation (hours); see the file for the resume command
+```
 
 ## Prior work
 

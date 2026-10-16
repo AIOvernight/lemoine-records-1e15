@@ -1,0 +1,9 @@
+# Candidate terms from the GPU run (log/gpu_3.6e15.log), in the format of the files in this directory
+# (record index, n, value). Not yet submitted to the OEIS. The index continues the chain of log/l1e15.log:
+# A had 57 records below 2N (50 in the OEIS tables + 7 new in that log), B had 54 (41 + 13).
+# A (least q): A194828 (n) / A194829 (q); verified for odd n < 7215294338564096.
+58 2313425910783103 13841
+# B (least p): A195353 (n) / A195354 (p); verified for odd n < 3607647169282048.
+55 1880662361770607 5939
+56 2423130987173003 6317
+57 3058699595197417 6337

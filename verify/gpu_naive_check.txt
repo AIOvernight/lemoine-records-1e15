@@ -1,0 +1,11 @@
+# verify/gpu_naive_check.py log/gpu_3.6e15.log 100000  (deterministic Miller-Rabin from the definitions; also the max over the 100000 preceding odd n)
+A n=2313425910783103 v=13841 recomputed=13841 max_prev_100000=4283 ok
+B n=1880662361770607 v=5939 recomputed=5939 max_prev_100000=1621 ok
+B n=2423130987173003 v=6317 recomputed=6317 max_prev_100000=1543 ok
+B n=3058699595197417 v=6337 recomputed=6337 max_prev_100000=2083 ok
+ALL OK 0
+
+# Shimizu's verify/naive_check.py on log/gpu_3.6e15.log:
+A: 1/1 match; n and value strictly increasing: True
+B: 3/3 match; n and value strictly increasing: True
+naive check: OK

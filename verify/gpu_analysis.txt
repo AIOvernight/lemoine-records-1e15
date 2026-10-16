@@ -1,0 +1,8 @@
+segments 10119  range [1000000725188608, 3607647169282048)  numbers 2.608e+15  wall 6.31 h  mean rate 1.15e+11 n/s
+per-segment maxB: min 3797 median 4337 max 6337;  maxA: min 8719 median 9929 max 13841
+uncovered fraction (beyond K=128 small primes): B 0.2201%  A 0.2250%
+records (value / ln(n)^2):
+  REC B 1880662361770607 5939   v/ln(n)^2 = 4.801
+  REC A 2313425910783103 13841   v/ln(n)^2 = 11.059
+  REC B 2423130987173003 6317   v/ln(n)^2 = 5.034
+  REC B 3058699595197417 6337   v/ln(n)^2 = 4.984

@@ -1,0 +1,25 @@
+# verify/gpu_continuity.py on log/gpu_3.6e15.log  (2026-10-16T04:15Z)
+segments=10119 covered [1000000725188608, 3607647169282048)  pi(end-1)=103694116073174  selfchecks=10031 naive=1296
+REC B 1880662361770607 5939
+REC B 2423130987173003 6317
+REC B 3058699595197417 6337
+REC A 2313425910783103 13841
+CONTINUITY OK 0
+
+# Shimizu's verify/continuity.py on log/gpu_3.6e15.log alone (expected to fail on format: first X is N, not 2^28; pi is cumulative from pi(N); no ALLDONE/EXIT):
+DONE lines: 10119, first X=1000000725188608, last E=3607647169282048, last width=240*2^30
+ALLDONE N=None pi=None fail=None; EXIT None; other lines: {'START': 3}
+  #1: X=1000000725188608 but previous E=268435456
+  #1: pi=29852052524859 but cumulative piseg=7475741147
+  ... (format issues only; see README)
+
+# Shimizu's verify/continuity.py on the chain log/l1e15.log (without ALLDONE/EXIT) + log/gpu_3.6e15.log:
+DONE lines: 14000, first X=268435456, last E=3607647169282048, last width=240*2^30
+ALLDONE N=None pi=None fail=None; EXIT None; other lines: {'BUILD': 1, 'START': 4}
+  #3881: width 132070244352 != 240*2^30
+  START lines: 4 (expected 1)
+  ALLDONE fail=None (expected 0)
+  EXIT None (expected rc=0)
+  last line is 'SELFCHECK X=3607762059657216 words_diff=0 cnt_gpu=29976309 cnt_cpu=29976309 ok' (expected 'EXIT rc=0')
+  last E=3607647169282048 != ALLDONE N=None
+continuity: NG (6 issues)
